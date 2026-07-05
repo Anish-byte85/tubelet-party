@@ -1,0 +1,16 @@
+# Render Blueprint — one-click deploy
+# Push this repo to GitHub, then on Render:
+#   New + → Blueprint → connect repo → Apply
+services:
+  - type: web
+    name: tubelet-party
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT --timeout 120 app:app
+    healthCheckPath: /healthz
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.11.9

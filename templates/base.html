@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0f0f0f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>{% block title %}Tubelet Party{% endblock %}</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23ff0033'/%3E%3Cpolygon points='38,28 74,50 38,72' fill='white'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0a0a0a; --bg-2:#151515; --bg-3:#1f1f1f; --bg-4:#2a2a2a;
+    --text:#f5f5f5; --muted:#9a9a9a; --muted-2:#6a6a6a;
+    --brand:#ff0033; --brand-2:#ff3358; --brand-dim:rgba(255,0,51,.15);
+    --border:#262626; --border-2:#333;
+    --ok:#22c55e; --warn:#eab308; --err:#ef4444; --info:#38bdf8; --gold:#fbbf24;
+    --radius:14px; --radius-sm:10px; --radius-lg:20px;
+    --shadow:0 10px 40px rgba(0,0,0,.4);
+    --safe-top:env(safe-area-inset-top);
+    --safe-bottom:env(safe-area-inset-bottom);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+            font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+            -webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
+  body{min-height:100vh;min-height:100dvh}
+  a{color:inherit;text-decoration:none}
+  code{background:var(--bg-3);padding:2px 6px;border-radius:4px;font-size:.9em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  button{font-family:inherit}
+  ::selection{background:var(--brand);color:#fff}
+
+  /* ===== Top bar ===== */
+  .topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;
+          padding:calc(10px + var(--safe-top)) 16px 10px;background:rgba(10,10,10,.85);
+          backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+          border-bottom:1px solid var(--border)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:-.3px}
+  .brand-mark{display:inline-flex;align-items:center;justify-content:center;
+              width:32px;height:32px;background:linear-gradient(135deg,var(--brand),var(--brand-2));
+              border-radius:9px;color:#fff;font-size:14px;box-shadow:0 4px 12px rgba(255,0,51,.35)}
+  .brand-mark::after{content:"▶";margin-left:2px}
+  .brand small{color:var(--muted);font-weight:500;font-size:12px;margin-left:2px;text-transform:uppercase;letter-spacing:1px}
+  .spacer{flex:1}
+  .nav{display:flex;gap:8px;align-items:center}
+  .nav a,.nav button{padding:8px 14px;border-radius:999px;background:var(--bg-3);
+                     border:1px solid var(--border);color:var(--text);cursor:pointer;
+                     font-size:13px;font-weight:500;transition:all .15s;white-space:nowrap}
+  .nav a:hover,.nav button:hover{background:var(--bg-4);border-color:var(--border-2)}
+  .nav a:active,.nav button:active{transform:scale(.96)}
+  .nav .icon-only{padding:8px 10px}
+  .avatar{width:36px;height:36px;border-radius:50%;
+          background:linear-gradient(135deg,var(--brand),var(--brand-2));
+          display:inline-flex;align-items:center;justify-content:center;font-weight:700;
+          font-size:14px;color:#fff;flex-shrink:0}
+
+  @media(max-width:640px){
+    .topbar{padding:calc(8px + var(--safe-top)) 12px 8px;gap:8px}
+    .brand{font-size:17px}
+    .brand small{display:none}
+    .nav a span.text{display:none}
+    .nav a{padding:8px 10px;font-size:14px}
+  }
+
+  /* ===== Layout ===== */
+  .container{max-width:1400px;margin:0 auto;padding:20px 16px}
+  .card{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius)}
+
+  /* ===== Buttons / inputs ===== */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+       padding:13px 20px;border-radius:var(--radius-sm);border:0;cursor:pointer;
+       font-weight:600;font-size:15px;transition:all .15s;min-height:46px;
+       font-family:inherit}
+  .btn:active{transform:scale(.97)}
+  .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+  .btn-primary{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#fff;
+               box-shadow:0 4px 14px rgba(255,0,51,.3)}
+  .btn-primary:hover:not(:disabled){box-shadow:0 6px 20px rgba(255,0,51,.4);transform:translateY(-1px)}
+  .btn-ghost{background:var(--bg-3);color:var(--text);border:1px solid var(--border)}
+  .btn-ghost:hover:not(:disabled){background:var(--bg-4);border-color:var(--border-2)}
+  .btn-danger{background:var(--err);color:#fff}
+
+  input,textarea,select{padding:13px 15px;background:var(--bg-3);border:1px solid var(--border);
+                        border-radius:var(--radius-sm);color:var(--text);font-size:16px;
+                        outline:none;font-family:inherit;transition:border-color .15s;width:100%;
+                        min-height:46px}
+  input:focus,textarea:focus,select:focus{border-color:var(--brand);
+                                          box-shadow:0 0 0 3px var(--brand-dim)}
+  input::placeholder,textarea::placeholder{color:var(--muted-2)}
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .field label{font-size:13px;color:var(--muted);font-weight:500}
+
+  /* ===== Auth screens ===== */
+  .auth-wrap{min-height:100vh;min-height:100dvh;display:grid;place-items:center;
+             padding:20px;padding-top:calc(20px + var(--safe-top));padding-bottom:calc(20px + var(--safe-bottom));
+             background:radial-gradient(1200px 600px at 20% -10%,rgba(255,0,51,.18),transparent 60%),
+                        radial-gradient(900px 500px at 100% 100%,rgba(56,189,248,.10),transparent 60%),
+                        var(--bg)}
+  .auth-card{width:100%;max-width:420px;background:var(--bg-2);border:1px solid var(--border);
+             border-radius:var(--radius-lg);padding:28px;box-shadow:var(--shadow)}
+  .auth-card .logo{display:flex;align-items:center;gap:10px;margin-bottom:20px}
+  .auth-card .logo .brand-mark{width:36px;height:36px;font-size:14px}
+  .auth-card h1{margin:0 0 6px;font-size:24px;letter-spacing:-.5px}
+  .auth-card p.sub{color:var(--muted);margin:0 0 24px;font-size:14px}
+  .link{color:var(--info);text-decoration:none}
+  .link:hover{text-decoration:underline}
+
+  /* ===== Flash toasts ===== */
+  .flashes{position:fixed;top:calc(70px + var(--safe-top));left:16px;right:16px;z-index:100;
+           display:flex;flex-direction:column;gap:8px;pointer-events:none;align-items:center}
+  .flash{padding:12px 16px;border-radius:var(--radius-sm);font-size:14px;
+         background:var(--bg-2);border:1px solid var(--border);
+         box-shadow:var(--shadow);pointer-events:auto;max-width:500px;width:100%;
+         animation:slideIn .3s ease}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+  .flash.success{border-color:var(--ok);background:rgba(34,197,94,.1)}
+  .flash.danger{border-color:var(--err);background:rgba(239,68,68,.1)}
+  .flash.warning{border-color:var(--warn);background:rgba(234,179,8,.1)}
+  .flash.info{border-color:var(--info);background:rgba(56,189,248,.1)}
+
+  /* ===== Badges ===== */
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;
+         font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .badge.host{background:rgba(251,191,36,.15);color:var(--gold);border:1px solid rgba(251,191,36,.3)}
+  .badge.live{background:rgba(239,68,68,.15);color:var(--err);border:1px solid rgba(239,68,68,.3)}
+  .badge.live::before{content:"";width:6px;height:6px;background:var(--err);border-radius:50%;
+                      animation:pulse 1.5s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  /* Scrollbars */
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--bg-4);border-radius:4px}
+  ::-webkit-scrollbar-thumb:hover{background:var(--border-2)}
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+
+{% if current_user.is_authenticated %}
+<header class="topbar">
+  <a href="{{ url_for('lobby') }}" class="brand">
+    <span class="brand-mark"></span>Tubelet <small>Party</small>
+  </a>
+  <div class="spacer"></div>
+  <nav class="nav">
+    <a href="{{ url_for('lobby') }}" title="Lobby">🏠 <span class="text">Lobby</span></a>
+    <a href="{{ url_for('logout') }}" title="Logout">↪ <span class="text">Logout</span></a>
+    <span class="avatar" title="{{ current_user.username }}">{{ current_user.username[0]|upper }}</span>
+  </nav>
+</header>
+{% endif %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="flashes">
+      {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+{% block content %}{% endblock %}
+{% block scripts %}{% endblock %}
+
+<script>
+  setTimeout(() => document.querySelectorAll('.flash').forEach(f => {
+    f.style.transition = 'opacity .3s';
+    f.style.opacity = '0';
+    setTimeout(() => f.remove(), 300);
+  }), 4500);
+</script>
+</body>
+</html>

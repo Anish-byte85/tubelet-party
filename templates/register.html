@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Create account — Tubelet Party{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="logo">
+      <span class="brand-mark"></span>
+      <span style="font-weight:800;font-size:20px">Tubelet <small style="color:var(--muted);font-weight:500;font-size:12px;letter-spacing:1px;text-transform:uppercase">Party</small></span>
+    </div>
+    <h1>Create your account 🎉</h1>
+    <p class="sub">It only takes a moment.</p>
+    <form method="post">
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      <div class="field">
+        <label>Username</label>
+        <input name="username" required autofocus autocomplete="username" autocapitalize="none"
+               minlength="2" maxlength="20" pattern="[A-Za-z0-9_]+"
+               title="Letters, numbers, underscores only">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" name="email" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Password (min 6 chars)</label>
+        <input type="password" name="password" required minlength="6" autocomplete="new-password">
+      </div>
+      <button class="btn btn-primary" type="submit" style="width:100%">Sign up</button>
+    </form>
+    <p style="margin-top:20px;color:var(--muted);font-size:14px;text-align:center">
+      Already have an account? <a class="link" href="{{ url_for('login', next=next) }}">Sign in</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,683 @@
+{% extends "base.html" %}
+{% block title %}{{ room['name'] }} — Tubelet Party{% endblock %}
+{% block head %}
+<style>
+  /* ============================================================
+     Room — YouTube Live style layout
+     ============================================================ */
+  body{overflow:hidden}                                /* stage takes full viewport */
+  .topbar{border-bottom-color:transparent}
+
+  .stage{
+    display:grid;
+    grid-template-columns:1fr 380px;
+    gap:0;
+    height:calc(100vh - 56px - var(--safe-top));
+    height:calc(100dvh - 56px - var(--safe-top));
+    background:var(--bg);
+    overflow:hidden;
+  }
+
+  /* ===== LEFT: video + info + controls ===== */
+  .video-col{
+    display:flex;flex-direction:column;min-width:0;min-height:0;
+    background:#000;
+    overflow:hidden;
+  }
+  .player-shell{
+    position:relative;flex:1;min-height:0;
+    display:flex;align-items:center;justify-content:center;
+    background:#000;
+  }
+  .player-frame{
+    position:relative;
+    width:100%;height:100%;
+    max-height:calc(100vh - 220px);
+    aspect-ratio:16/9;
+    margin:0 auto;
+  }
+  #player{width:100%;height:100%;pointer-events:auto}
+  /* Shield: for viewers, we cover the iframe so they can't click YT controls.
+     For the host, this element is display:none so YT's own controls work. */
+  .player-shield{
+    position:absolute;inset:0;z-index:5;
+    background:transparent;cursor:not-allowed;
+  }
+  /* Empty state overlay */
+  .player-empty{
+    position:absolute;inset:0;display:grid;place-items:center;
+    color:var(--muted);text-align:center;padding:24px;
+    background:linear-gradient(180deg,#0a0a0a,#000);z-index:6;
+  }
+  .player-empty .big{font-size:64px;margin-bottom:12px;opacity:.6}
+  .player-empty .msg{font-size:15px;max-width:320px;line-height:1.5;color:var(--muted)}
+
+  /* Play/Pause status pill (viewers only) */
+  .status-pill{
+    position:absolute;top:14px;left:14px;z-index:7;
+    display:none;align-items:center;gap:6px;
+    padding:6px 12px;border-radius:999px;
+    background:rgba(0,0,0,.6);backdrop-filter:blur(10px);
+    color:#fff;font-size:12px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.5px;
+    pointer-events:none;
+    animation:fadeIn .3s ease;
+  }
+  .status-pill.show{display:inline-flex}
+  .status-pill.playing::before{content:"";width:8px;height:8px;background:var(--err);
+    border-radius:50%;animation:pulse 1.5s ease-in-out infinite}
+  .status-pill.paused::before{content:"⏸";font-size:11px}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
+  /* ===== Video info panel (below player) ===== */
+  .video-info{
+    padding:14px 20px;background:var(--bg);flex-shrink:0;
+    border-top:1px solid var(--border);
+  }
+  .room-title{
+    margin:0 0 8px;font-size:17px;font-weight:700;letter-spacing:-.3px;
+    color:var(--text);display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  }
+  .room-title .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .info-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    font-size:13px;color:var(--muted);margin-bottom:12px}
+  .info-row strong{color:var(--text)}
+  .code-pill{display:inline-flex;align-items:center;gap:8px;background:var(--bg-3);
+    padding:5px 12px;border-radius:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-weight:700;letter-spacing:3px;color:var(--text);font-size:12px;
+    border:1px solid var(--border)}
+  .viewers-inline{display:inline-flex;align-items:center;gap:6px}
+  .viewers-inline .dot{width:7px;height:7px;background:var(--ok);border-radius:50%;
+    box-shadow:0 0 6px rgba(34,197,94,.6);animation:pulse 2s infinite}
+  .icon-btn{background:var(--bg-3);border:1px solid var(--border);
+    color:var(--text);cursor:pointer;font-size:12px;
+    padding:6px 12px;border-radius:8px;font-weight:600;transition:all .15s;
+    display:inline-flex;align-items:center;gap:6px}
+  .icon-btn:hover{background:var(--bg-4);border-color:var(--border-2)}
+
+  /* ===== Host controls ===== */
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .chip{padding:9px 15px;border-radius:999px;background:var(--bg-3);border:1px solid var(--border);
+    color:var(--text);cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;
+    display:inline-flex;align-items:center;gap:6px;min-height:38px;font-family:inherit;white-space:nowrap}
+  .chip:hover:not(:disabled){background:var(--bg-4);border-color:var(--border-2)}
+  .chip:active{transform:scale(.96)}
+  .chip:disabled{opacity:.4;cursor:not-allowed}
+  .chip.primary{background:linear-gradient(135deg,var(--brand),var(--brand-2));
+    border-color:transparent;color:#fff;box-shadow:0 3px 10px rgba(255,0,51,.3)}
+  .chip.primary:hover:not(:disabled){box-shadow:0 4px 14px rgba(255,0,51,.4)}
+  .load-form{display:flex;gap:8px;flex:1;min-width:220px}
+  .load-form input{flex:1;padding:9px 14px;min-height:38px;font-size:13px;
+    background:var(--bg-3);border:1px solid var(--border);color:var(--text);border-radius:8px}
+  .load-form input:focus{border-color:var(--brand)}
+  .viewer-hint{color:var(--muted);font-size:13px;display:inline-flex;align-items:center;gap:8px;
+    padding:8px 14px;background:var(--bg-3);border-radius:999px;border:1px solid var(--border)}
+
+  /* ===== RIGHT: chat panel ===== */
+  .chat-panel{
+    background:var(--bg-2);border-left:1px solid var(--border);
+    display:flex;flex-direction:column;min-width:0;min-height:0;
+    height:100%;
+  }
+  .chat-tabs{
+    display:flex;border-bottom:1px solid var(--border);flex-shrink:0;
+    background:var(--bg-2);
+  }
+  .chat-tab{
+    flex:1;padding:14px 12px;background:none;border:0;color:var(--muted);
+    font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;
+    transition:all .15s;text-transform:uppercase;letter-spacing:.5px;
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:inherit;
+  }
+  .chat-tab:hover{color:var(--text)}
+  .chat-tab.active{color:var(--text);border-bottom-color:var(--brand)}
+  .chat-tab .count{background:var(--bg-4);color:var(--text);
+    font-size:10px;padding:1px 7px;border-radius:8px;font-weight:700;min-width:18px}
+  .chat-tab.active .count{background:var(--brand);color:#fff}
+
+  .tab-pane{display:none;flex:1;min-height:0;flex-direction:column}
+  .tab-pane.active{display:flex}
+
+  /* Chat log */
+  .chat-log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:6px;
+    scroll-behavior:smooth}
+  .msg{display:flex;flex-direction:column;gap:2px;max-width:92%;animation:msgIn .18s ease}
+  @keyframes msgIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+  .msg .meta{font-size:11px;color:var(--muted);padding:0 4px;display:flex;align-items:center;gap:6px}
+  .msg .meta strong{color:var(--text);font-weight:600;font-size:12px}
+  .msg .meta .badge{padding:1px 6px;font-size:9px}
+  .msg .body{background:var(--bg-3);padding:8px 12px;border-radius:14px 14px 14px 4px;
+    word-wrap:break-word;overflow-wrap:break-word;font-size:14px;line-height:1.4;color:var(--text)}
+  .msg.mine{align-self:flex-end;align-items:flex-end}
+  .msg.mine .body{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#fff;
+    border-radius:14px 14px 4px 14px}
+  .msg.host-msg .body{border:1px solid rgba(251,191,36,.3);background:rgba(251,191,36,.08)}
+  .msg.system{align-self:center;color:var(--muted);font-size:11px;text-align:center;
+    font-style:italic;padding:3px 10px;background:var(--bg-3);border-radius:10px;
+    max-width:90%;opacity:.8}
+  .typing{font-size:11px;color:var(--muted);padding:0 14px 4px;min-height:16px;font-style:italic}
+
+  .chat-form{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border);
+    padding-bottom:calc(10px + var(--safe-bottom));flex-shrink:0;background:var(--bg-2)}
+  .chat-form input{flex:1;padding:10px 14px;min-height:40px;font-size:14px;
+    background:var(--bg-3);border:1px solid var(--border);color:var(--text);border-radius:20px}
+  .chat-form input:focus{border-color:var(--brand)}
+  .chat-form button{padding:10px 16px;min-height:40px;flex-shrink:0;border-radius:20px}
+
+  /* Viewers list */
+  .viewers-list{flex:1;overflow-y:auto;padding:10px 14px}
+  .viewer{display:flex;align-items:center;gap:10px;padding:8px 4px;font-size:14px;border-radius:8px}
+  .viewer .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex-shrink:0;
+    box-shadow:0 0 6px rgba(34,197,94,.6)}
+  .viewer .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* ===== Floating chat button (mobile only) ===== */
+  .fab{
+    display:none;
+    position:fixed;bottom:calc(20px + var(--safe-bottom));right:16px;z-index:40;
+    width:56px;height:56px;border-radius:50%;
+    background:linear-gradient(135deg,var(--brand),var(--brand-2));
+    color:#fff;border:0;font-size:24px;cursor:pointer;
+    box-shadow:0 6px 20px rgba(255,0,51,.5);
+    align-items:center;justify-content:center;
+    transition:transform .15s;
+  }
+  .fab:active{transform:scale(.92)}
+  .fab .badge-count{
+    position:absolute;top:-4px;right:-4px;
+    background:#fff;color:var(--brand);font-size:11px;font-weight:700;
+    padding:2px 6px;border-radius:10px;min-width:20px;
+    box-shadow:0 2px 6px rgba(0,0,0,.4);
+  }
+
+  /* ===== Mobile: chat becomes bottom sheet / drawer ===== */
+  @media(max-width:900px){
+    body{overflow:auto}
+    .stage{
+      grid-template-columns:1fr;
+      height:auto;min-height:calc(100dvh - 56px - var(--safe-top));
+    }
+    .video-col{background:#000}
+    .player-frame{max-height:none;aspect-ratio:16/9}
+    .video-info{padding:12px 14px}
+    .room-title{font-size:15px}
+    .info-row{font-size:12px;gap:8px}
+    .chip{padding:8px 12px;font-size:12px;min-height:36px}
+    .load-form{width:100%;order:99}
+    .load-form input{font-size:14px}
+
+    /* Chat panel becomes an overlay drawer */
+    .chat-panel{
+      position:fixed;inset:0;top:auto;height:80vh;height:80dvh;
+      z-index:50;border-left:0;border-top:1px solid var(--border);
+      border-radius:20px 20px 0 0;
+      transform:translateY(100%);
+      transition:transform .28s cubic-bezier(.4,0,.2,1);
+      box-shadow:0 -20px 60px rgba(0,0,0,.5);
+    }
+    .chat-panel.open{transform:translateY(0)}
+    .chat-panel .drag-handle{
+      display:block;width:40px;height:4px;background:var(--border-2);
+      border-radius:2px;margin:8px auto 4px;flex-shrink:0;
+    }
+    .chat-panel .close-btn{
+      position:absolute;top:12px;right:12px;background:var(--bg-3);border:0;
+      color:var(--text);width:32px;height:32px;border-radius:50%;cursor:pointer;
+      font-size:16px;display:inline-flex;align-items:center;justify-content:center;z-index:2;
+    }
+    .fab{display:inline-flex}
+    /* Backdrop when drawer open */
+    .drawer-backdrop{
+      display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:45;
+      animation:fadeIn .2s ease;
+    }
+    .drawer-backdrop.show{display:block}
+  }
+  @media(min-width:901px){
+    .chat-panel .drag-handle,.chat-panel .close-btn{display:none}
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="stage">
+  <!-- ============ LEFT: VIDEO ============ -->
+  <div class="video-col">
+    <div class="player-shell">
+      <div class="player-frame">
+        <div id="player"></div>
+        {% if not is_admin %}
+          <!-- Shield blocks all clicks on YT iframe for viewers -->
+          <div class="player-shield" id="playerShield"
+               title="Only the host controls the video"
+               onclick="showToast('🔒 Only the host can control the video','info')"></div>
+        {% endif %}
+        <div class="status-pill" id="statusPill"></div>
+        <div class="player-empty" id="playerEmpty"
+             style="display:{{ 'none' if room['video_id'] else 'grid' }}">
+          <div>
+            <div class="big">🎬</div>
+            <div class="msg">{% if is_admin %}Paste a YouTube URL below to start the show.{% else %}Waiting for the host to pick a video…{% endif %}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="video-info">
+      <div class="room-title">
+        <span class="name">{{ room['name'] }}</span>
+        <span class="badge live">Live</span>
+      </div>
+      <div class="info-row">
+        <span>Host: <strong>👑 {{ admin_name }}</strong></span>
+        <span class="viewers-inline"><span class="dot"></span><strong id="viewerCountInline">1</strong> watching</span>
+        <span class="code-pill" id="codePill">{{ room['code'] }}</span>
+        <button class="icon-btn" onclick="copyInvite(this)">🔗 Copy invite</button>
+      </div>
+      <div class="controls">
+        {% if is_admin %}
+          <button class="chip primary" onclick="hostPlay()" title="Play for everyone">▶ Play</button>
+          <button class="chip" onclick="hostPause()" title="Pause for everyone">⏸ Pause</button>
+          <button class="chip" onclick="hostSync()" title="Force resync all viewers">🔄 Sync</button>
+          <form class="load-form" onsubmit="loadVideo(event)">
+            <input id="urlInput" placeholder="Paste YouTube URL…" inputmode="url" autocomplete="off">
+            <button class="chip primary" type="submit">Load</button>
+          </form>
+        {% else %}
+          <span class="viewer-hint">🔒 Only the host controls playback</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RIGHT: CHAT + VIEWERS ============ -->
+  <aside class="chat-panel" id="chatPanel">
+    <div class="drag-handle"></div>
+    <button class="close-btn" onclick="closeChat()" aria-label="Close chat">✕</button>
+    <div class="chat-tabs">
+      <button class="chat-tab active" data-pane="chat">💬 Chat</button>
+      <button class="chat-tab" data-pane="viewers">👥 <span class="count" id="viewerCount">1</span></button>
+    </div>
+
+    <div class="tab-pane active" id="paneChat">
+      <div class="chat-log" id="chatLog">
+        {% for m in messages %}
+          <div class="msg {{ 'mine' if m['username'] == current_user.username else '' }}">
+            <div class="meta"><strong>{{ m['username'] }}</strong><span>{{ m['created_at'][11:16] }}</span></div>
+            <div class="body">{{ m['body'] }}</div>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="typing" id="typing"></div>
+      <form class="chat-form" onsubmit="sendChat(event)">
+        <input id="chatInput" placeholder="Say something…" autocomplete="off" maxlength="500" enterkeyhint="send">
+        <button class="btn btn-primary" type="submit">Send</button>
+      </form>
+    </div>
+
+    <div class="tab-pane" id="paneViewers">
+      <div class="viewers-list" id="viewers"></div>
+    </div>
+  </aside>
+</div>
+
+<!-- Mobile FAB + backdrop -->
+<div class="drawer-backdrop" id="drawerBackdrop" onclick="closeChat()"></div>
+<button class="fab" id="chatFab" onclick="openChat()" aria-label="Open chat">
+  💬<span class="badge-count" id="unreadBadge" style="display:none">0</span>
+</button>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+(() => {
+  const ROOM = "{{ room['code'] }}";
+  const IS_ADMIN = {{ 'true' if is_admin else 'false' }};
+  const ME = "{{ current_user.username }}";
+  const INITIAL_VIDEO = {{ (room['video_id'] or '')|tojson }};
+
+  const socket = io({
+    transports:['websocket','polling'],
+    reconnection:true, reconnectionDelay:500, reconnectionDelayMax:3000,
+    timeout:8000,
+  });
+
+  let player = null, ytReady = false;
+  let suppressEvent = false;            // don't re-emit when we're APPLYING remote actions
+  let pendingLoad = null, pendingState = null;
+  let currentVideoId = INITIAL_VIDEO || null;
+
+  // -------- YouTube IFrame API --------
+  window.onYouTubeIframeAPIReady = () => {
+    player = new YT.Player('player', {
+      height:'100%', width:'100%',
+      videoId: INITIAL_VIDEO || '',
+      playerVars:{
+        playsinline:1,
+        rel:0,
+        modestbranding:1,
+        iv_load_policy:3,
+        // Viewers: hide native controls & disable keyboard shortcuts.
+        // Host: full controls & keyboard.
+        controls: IS_ADMIN ? 1 : 0,
+        disablekb: IS_ADMIN ? 0 : 1,
+        fs: IS_ADMIN ? 1 : 0,
+      },
+      events:{
+        onReady: () => {
+          ytReady = true;
+          if(pendingState) applyStateNow(pendingState);
+          else if(pendingLoad) player.loadVideoById(pendingLoad);
+          // Set initial mute state — viewers should hear audio; keep unmuted
+          try{ player.unMute(); }catch(e){}
+        },
+        onStateChange: onPlayerStateChange
+      }
+    });
+  };
+
+  function onPlayerStateChange(e){
+    if(!IS_ADMIN || suppressEvent) return;
+    // Only host broadcasts; guard against system-triggered state changes
+    if(e.data === YT.PlayerState.PLAYING){
+      broadcastPlayer('play', player.getCurrentTime());
+    } else if(e.data === YT.PlayerState.PAUSED){
+      broadcastPlayer('pause', player.getCurrentTime());
+    }
+  }
+
+  // Debounce broadcasts so seek scrubbing doesn't spam
+  let lastBroadcast = 0;
+  function broadcastPlayer(action, position){
+    const now = Date.now();
+    if(action === 'seek' && now - lastBroadcast < 150) return;
+    lastBroadcast = now;
+    socket.emit('player', {code:ROOM, action, position});
+  }
+
+  // Host: detect manual seeks (jumps > 1s outside natural playback)
+  if(IS_ADMIN){
+    let lastT = 0, lastCheck = Date.now();
+    setInterval(() => {
+      if(!ytReady || !player.getCurrentTime) return;
+      const now = Date.now();
+      const t = player.getCurrentTime();
+      const drift = Math.abs(t - lastT - (now - lastCheck)/1000);
+      const st = player.getPlayerState();
+      if(drift > 1.0 && st !== YT.PlayerState.BUFFERING &&
+         st !== YT.PlayerState.UNSTARTED && !suppressEvent){
+        broadcastPlayer('seek', t);
+      }
+      lastT = t; lastCheck = now;
+    }, 800);
+  }
+
+  // -------- Socket handlers --------
+  socket.on('connect', () => {
+    socket.emit('join', {code:ROOM});
+    // On reconnect, viewers request latest state
+    if(!IS_ADMIN) socket.emit('sync_request', {code:ROOM});
+  });
+  socket.on('connect_error', () => showToast('Connection issue — retrying…', 'warning'));
+
+  socket.on('sync', s => {
+    pendingState = s;
+    if(ytReady) applyStateNow(s);
+  });
+
+  socket.on('load', s => {
+    document.getElementById('playerEmpty').style.display = 'none';
+    currentVideoId = s.video_id;
+    if(!ytReady){ pendingLoad = s.video_id; pendingState = s; return; }
+    suppressEvent = true;
+    try{
+      player.loadVideoById({videoId:s.video_id, startSeconds:s.position||0});
+      if(!s.playing) setTimeout(() => { try{player.pauseVideo()}catch(e){} }, 500);
+    }catch(e){}
+    setTimeout(() => suppressEvent = false, 1000);
+  });
+
+  socket.on('player', ({action, position, ts}) => {
+    if(IS_ADMIN || !ytReady) return;
+    // Compensate for network latency: add (now - server_ts) to position if playing
+    const latency = ts ? Math.max(0, Date.now()/1000 - ts) : 0;
+    suppressEvent = true;
+    try{
+      if(action === 'seek'){
+        player.seekTo(position, true);
+      } else if(action === 'play'){
+        player.seekTo(position + latency, true);
+        player.playVideo();
+        setStatus('playing');
+      } else if(action === 'pause'){
+        player.seekTo(position, true);
+        player.pauseVideo();
+        setStatus('paused');
+      }
+    }catch(e){}
+    // Short suppression — remote actions are near-instant
+    setTimeout(() => suppressEvent = false, 400);
+  });
+
+  function applyStateNow(s){
+    if(!s || !s.video_id) return;
+    document.getElementById('playerEmpty').style.display = 'none';
+    currentVideoId = s.video_id;
+    suppressEvent = true;
+    const drift = s.updated_at ? (Date.now()/1000 - s.updated_at) : 0;
+    const pos = Math.max(0, (s.position || 0) + (s.playing ? drift : 0));
+    try{
+      player.loadVideoById({videoId:s.video_id, startSeconds:pos});
+      if(!s.playing) setTimeout(() => { try{player.pauseVideo()}catch(e){} }, 600);
+      if(!IS_ADMIN) setStatus(s.playing ? 'playing' : 'paused');
+    }catch(e){}
+    setTimeout(() => suppressEvent = false, 1000);
+    pendingState = null;
+  }
+
+  function setStatus(state){
+    if(IS_ADMIN) return;
+    const pill = document.getElementById('statusPill');
+    pill.className = 'status-pill show ' + state;
+    pill.textContent = state === 'playing' ? '● Live sync' : '⏸ Paused by host';
+    if(state === 'playing') setTimeout(() => pill.classList.remove('show'), 2000);
+  }
+
+  socket.on('viewers', list => {
+    document.getElementById('viewerCount').textContent = list.length;
+    document.getElementById('viewerCountInline').textContent = list.length;
+    document.getElementById('viewers').innerHTML = list.map(v =>
+      `<div class="viewer"><span class="dot"></span><span class="name">${escapeHTML(v.username)}</span>${v.is_admin?' <span class="badge host">👑</span>':''}</div>`
+    ).join('');
+  });
+
+  let unread = 0;
+  socket.on('chat', m => {
+    addMessage(m.username, m.body, m.created_at.slice(11,16), m.username === ME, m.is_admin);
+    // Increment unread if chat panel is closed on mobile OR user is on viewers tab
+    const chatVisible = isChatVisible();
+    if(!chatVisible && m.username !== ME){ unread++; updateUnread(); }
+  });
+  socket.on('system', m => addSystem(m.text));
+  socket.on('error', m => showToast(m.text, 'danger'));
+
+  let typingTimer;
+  socket.on('typing', ({username}) => {
+    const el = document.getElementById('typing');
+    el.textContent = `${username} is typing…`;
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => el.textContent = '', 2000);
+  });
+
+  // -------- UI helpers --------
+  function addMessage(u, body, time, mine, hostMsg){
+    const log = document.getElementById('chatLog');
+    const el = document.createElement('div');
+    el.className = 'msg' + (mine ? ' mine' : '') + (hostMsg && !mine ? ' host-msg' : '');
+    const hostBadge = hostMsg ? ' <span class="badge host">👑</span>' : '';
+    el.innerHTML = `<div class="meta"><strong>${escapeHTML(u)}</strong>${hostBadge}<span>${time}</span></div><div class="body">${escapeHTML(body)}</div>`;
+    log.appendChild(el);
+    scrollChat();
+  }
+  function addSystem(text){
+    const log = document.getElementById('chatLog');
+    const el = document.createElement('div');
+    el.className = 'msg system'; el.textContent = text;
+    log.appendChild(el);
+    scrollChat();
+  }
+  function scrollChat(){
+    const log = document.getElementById('chatLog');
+    if(log) log.scrollTop = log.scrollHeight;
+  }
+  function updateUnread(){
+    const el = document.getElementById('unreadBadge');
+    if(!el) return;
+    if(unread > 0){ el.style.display = 'inline-flex'; el.textContent = unread > 99 ? '99+' : unread; }
+    else el.style.display = 'none';
+  }
+
+  window.sendChat = (e) => {
+    e.preventDefault();
+    const input = document.getElementById('chatInput');
+    const body = input.value.trim(); if(!body) return;
+    socket.emit('chat', {code:ROOM, body});
+    input.value = '';
+  };
+
+  document.getElementById('chatInput').addEventListener('input', () => {
+    socket.emit('typing', {code:ROOM});
+  });
+
+  // -------- Host actions: INSTANT — act locally + broadcast simultaneously --------
+  window.hostPlay = () => {
+    if(!ytReady) return;
+    try{ player.playVideo(); }catch(e){}
+    // onPlayerStateChange will broadcast; also broadcast immediately for zero-delay
+    broadcastPlayer('play', player.getCurrentTime ? player.getCurrentTime() : 0);
+  };
+  window.hostPause = () => {
+    if(!ytReady) return;
+    try{ player.pauseVideo(); }catch(e){}
+    broadcastPlayer('pause', player.getCurrentTime ? player.getCurrentTime() : 0);
+  };
+  window.hostSync = () => {
+    if(!ytReady) return;
+    const t = player.getCurrentTime();
+    const playing = player.getPlayerState() === YT.PlayerState.PLAYING;
+    broadcastPlayer('seek', t);
+    broadcastPlayer(playing ? 'play' : 'pause', t);
+    showToast('✓ Viewers resynced', 'success');
+  };
+  window.loadVideo = (e) => {
+    e.preventDefault();
+    const input = document.getElementById('urlInput');
+    const url = input.value.trim();
+    if(!url) return;
+    socket.emit('load', {code:ROOM, url});
+    input.value = '';
+  };
+
+  window.copyInvite = (btn) => {
+    const url = location.origin + '/j/' + ROOM;
+    const done = () => {
+      const orig = btn.innerHTML;
+      btn.innerHTML = '✓ Copied!';
+      setTimeout(() => btn.innerHTML = orig, 2000);
+    };
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(url).then(done).catch(() => fallbackCopy(url, done));
+    } else fallbackCopy(url, done);
+  };
+  function fallbackCopy(text, cb){
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); cb(); }catch(e){}
+    document.body.removeChild(ta);
+  }
+
+  window.showToast = function(text, cat){
+    cat = cat || 'info';
+    let box = document.querySelector('.flashes');
+    if(!box){ box = document.createElement('div'); box.className='flashes'; document.body.appendChild(box); }
+    const el = document.createElement('div');
+    el.className = 'flash ' + cat; el.textContent = text;
+    box.appendChild(el);
+    setTimeout(() => { el.style.opacity='0'; setTimeout(() => el.remove(), 300); }, 2800);
+  };
+
+  function escapeHTML(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // -------- Chat panel: tabs + mobile drawer --------
+  document.querySelectorAll('.chat-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.chat-tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('pane' + btn.dataset.pane.charAt(0).toUpperCase() + btn.dataset.pane.slice(1)).classList.add('active');
+      if(btn.dataset.pane === 'chat'){ unread = 0; updateUnread(); scrollChat(); }
+    });
+  });
+
+  function isChatVisible(){
+    // On desktop, chat panel is always visible
+    if(window.innerWidth > 900){
+      // check if chat tab is active
+      return document.querySelector('.chat-tab[data-pane="chat"]').classList.contains('active');
+    }
+    // On mobile, only visible when drawer is open
+    return document.getElementById('chatPanel').classList.contains('open');
+  }
+
+  window.openChat = () => {
+    document.getElementById('chatPanel').classList.add('open');
+    document.getElementById('drawerBackdrop').classList.add('show');
+    unread = 0; updateUnread();
+    // Activate chat tab if on viewers
+    const chatTab = document.querySelector('.chat-tab[data-pane="chat"]');
+    if(!chatTab.classList.contains('active')) chatTab.click();
+    setTimeout(scrollChat, 100);
+    setTimeout(() => document.getElementById('chatInput').focus(), 300);
+  };
+  window.closeChat = () => {
+    document.getElementById('chatPanel').classList.remove('open');
+    document.getElementById('drawerBackdrop').classList.remove('show');
+  };
+
+  // Swipe down to close drawer on mobile
+  const panel = document.getElementById('chatPanel');
+  let touchStartY = 0;
+  panel.addEventListener('touchstart', (e) => {
+    if(e.touches[0].clientY - panel.getBoundingClientRect().top < 40){
+      touchStartY = e.touches[0].clientY;
+    } else touchStartY = 0;
+  }, {passive:true});
+  panel.addEventListener('touchmove', (e) => {
+    if(!touchStartY) return;
+    const delta = e.touches[0].clientY - touchStartY;
+    if(delta > 60){ closeChat(); touchStartY = 0; }
+  }, {passive:true});
+
+  // Auto scroll chat on load
+  window.addEventListener('load', scrollChat);
+  scrollChat();
+
+  // ---- Periodic re-sync for viewers (safety net, 30s) ----
+  if(!IS_ADMIN){
+    setInterval(() => {
+      if(document.visibilityState === 'visible') socket.emit('sync_request', {code:ROOM});
+    }, 30000);
+  }
+  // Re-sync when tab becomes visible again (user comes back)
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible' && !IS_ADMIN){
+      socket.emit('sync_request', {code:ROOM});
+    }
+  });
+})();
+</script>
+{% endblock %}

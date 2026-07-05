@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Lobby — Tubelet Party{% endblock %}
+{% block head %}
+<style>
+  .hero{text-align:center;padding:20px 0 30px;color:var(--muted)}
+  .hero h1{color:var(--text);font-size:32px;margin:0 0 8px;letter-spacing:-.8px;font-weight:800}
+  .hero p{margin:0;font-size:15px}
+  .action-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px}
+  @media(max-width:640px){.action-grid{grid-template-columns:1fr}.hero h1{font-size:26px}}
+  .action-card{padding:24px}
+  .action-card h2{margin:0 0 4px;font-size:18px;display:flex;align-items:center;gap:8px}
+  .action-card p{color:var(--muted);margin:0 0 20px;font-size:13px}
+  .code-input{text-transform:uppercase;letter-spacing:8px;text-align:center;
+              font-size:22px;font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .rooms-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .rooms-header h2{margin:0;font-size:18px}
+  .rooms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+  .room-card{padding:16px;transition:all .15s;cursor:pointer}
+  .room-card:hover{border-color:var(--border-2);transform:translateY(-2px)}
+  .room-card .top{display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:14px}
+  .room-card .name{font-size:15px;font-weight:600;line-height:1.3}
+  .room-card .code{color:var(--muted);font-size:12px;margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:2px}
+  .room-card .actions{display:flex;gap:8px}
+  .room-card .actions .btn{flex:1;padding:10px;font-size:14px;min-height:40px}
+  .empty{padding:40px 20px;text-align:center;color:var(--muted)}
+  .empty .icon{font-size:40px;margin-bottom:8px;opacity:.5}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container" style="max-width:960px">
+  <div class="hero">
+    <h1>🎬 Watch together</h1>
+    <p>Create a room or join with a code — everyone stays in perfect sync.</p>
+  </div>
+
+  <div class="action-grid">
+    <div class="card action-card">
+      <h2>🎥 Create a party</h2>
+      <p>You'll be the host — you control playback.</p>
+      <form method="post" action="{{ url_for('create_room') }}">
+        <div class="field"><label>Room name</label>
+          <input name="name" placeholder="Movie night" maxlength="60"></div>
+        <div class="field"><label>Starting video URL (optional)</label>
+          <input name="url" placeholder="youtube.com/watch?v=…" inputmode="url"></div>
+        <button class="btn btn-primary" style="width:100%">Create room →</button>
+      </form>
+    </div>
+
+    <div class="card action-card">
+      <h2>🚪 Join a party</h2>
+      <p>Enter a 6-character code from your friend.</p>
+      <form method="post" action="{{ url_for('join_room_form') }}">
+        <div class="field"><label>Room code</label>
+          <input name="code" class="code-input" placeholder="ABC123" maxlength="6"
+                 required autocomplete="off" autocapitalize="characters"
+                 pattern="[A-Za-z0-9]{6}" inputmode="text"
+                 oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"></div>
+        <button class="btn btn-primary" style="width:100%">Join room →</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="rooms-header">
+    <h2>👑 Rooms you host</h2>
+    {% if my_rooms %}<span style="color:var(--muted);font-size:13px">{{ my_rooms|length }} room{{ 's' if my_rooms|length != 1 else '' }}</span>{% endif %}
+  </div>
+
+  {% if my_rooms %}
+    <div class="rooms-grid">
+      {% for r in my_rooms %}
+        <div class="card room-card">
+          <div class="top">
+            <div>
+              <div class="name">{{ r['name'] }}</div>
+              <div class="code">{{ r['code'] }}</div>
+            </div>
+            <span class="badge host">👑</span>
+          </div>
+          <div class="actions">
+            <a class="btn btn-primary" href="{{ url_for('room', code=r['code']) }}">Enter</a>
+            <form method="post" action="{{ url_for('delete_room', code=r['code']) }}"
+                  onsubmit="return confirm('Delete this room?')" style="display:contents">
+              <button class="btn btn-ghost" style="flex:0 0 auto;padding:10px 14px" title="Delete room">🗑</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card empty">
+      <div class="icon">🍿</div>
+      <div>No rooms yet. Create one above to get started!</div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
