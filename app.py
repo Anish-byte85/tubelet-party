@@ -56,12 +56,27 @@ login_manager = LoginManager(app)
 login_manager.login_view = "login"
 login_manager.login_message_category = "warning"
 
-# Choose async mode: eventlet on server, threading for local dev fallback
+# Choose async mode: prefer gevent > eventlet > threading.
+# gevent is actively maintained; eventlet still works but shows a deprecation warning.
+ASYNC_MODE = "threading"
 try:
-    import eventlet  # noqa: F401
-    ASYNC_MODE = "eventlet"
+    import gevent  # noqa: F401
+    import geventwebsocket  # noqa: F401
+    ASYNC_MODE = "gevent"
 except ImportError:
-    ASYNC_MODE = "threading"
+    try:
+        # Silence eventlet's deprecation warning if we fall back to it
+        import warnings
+        warnings.filterwarnings("ignore", category=DeprecationWarning, module="eventlet")
+        try:
+            from eventlet.support import EventletDeprecationWarning  # type: ignore
+            warnings.filterwarnings("ignore", category=EventletDeprecationWarning)
+        except ImportError:
+            pass
+        import eventlet  # noqa: F401
+        ASYNC_MODE = "eventlet"
+    except ImportError:
+        pass
 
 socketio = SocketIO(
     app,
@@ -74,6 +89,7 @@ socketio = SocketIO(
 # In-memory state (per-worker; that's why Procfile uses 1 worker)
 PRESENCE: dict[str, dict[str, dict]] = {}  # {code: {sid: {"username","user_id"}}}
 PLAYER_STATE: dict[str, dict] = {}          # {code: {"video_id","playing","position","updated_at"}}
+QUEUE: dict[str, list[dict]] = {}           # {code: [{"video_id","title","added_by"}]}
 
 # Cache room -> admin_id to avoid a DB hit on every socket event
 _ADMIN_CACHE: dict[str, int] = {}
@@ -370,6 +386,7 @@ def delete_room(code):
         db.commit()
         PRESENCE.pop(code, None)
         PLAYER_STATE.pop(code, None)
+        QUEUE.pop(code, None)
         _ADMIN_CACHE.pop(code, None)
         flash("Room deleted.", "info")
     return redirect(url_for("lobby"))
@@ -443,6 +460,8 @@ def on_join(data):
         vid = _room_video_id(code)
         if vid:
             emit("load", {"video_id": vid, "playing": False, "position": 0})
+    # Send current queue to the newcomer
+    emit("queue", QUEUE.get(code, []))
 
 
 @socketio.on("disconnect")
@@ -540,6 +559,74 @@ def on_load(data):
     PLAYER_STATE[code] = {"video_id": vid, "playing": False, "position": 0, "updated_at": time.time()}
     emit("load", {"video_id": vid, "playing": False, "position": 0}, to=code)
     emit("system", {"text": f"🎬 {current_user.username} changed the video"}, to=code)
+
+
+# ---------------------------------------------------------------------------
+# Queue events (playlist for "Next" button)
+# ---------------------------------------------------------------------------
+def _emit_queue(code: str):
+    emit("queue", QUEUE.get(code, []), to=code)
+
+
+@socketio.on("queue_add")
+def on_queue_add(data):
+    """Anyone can suggest a video for the queue."""
+    if not current_user.is_authenticated:
+        return
+    code = ((data or {}).get("code") or "").upper()
+    vid = extract_video_id((data or {}).get("url", ""))
+    if not code or not _admin_of(code):
+        return
+    if not vid:
+        emit("error", {"text": "Invalid YouTube URL."})
+        return
+    q = QUEUE.setdefault(code, [])
+    if len(q) >= 50:
+        emit("error", {"text": "Queue is full (50 max)."})
+        return
+    q.append({"video_id": vid, "added_by": current_user.username})
+    _emit_queue(code)
+    emit("system", {"text": f"➕ {current_user.username} queued a video"}, to=code)
+
+
+@socketio.on("queue_remove")
+def on_queue_remove(data):
+    """Host removes a queue item by index."""
+    code = ((data or {}).get("code") or "").upper()
+    idx = int((data or {}).get("index", -1) or -1)
+    if not code or not _require_admin(code):
+        return
+    q = QUEUE.get(code, [])
+    if 0 <= idx < len(q):
+        q.pop(idx)
+        _emit_queue(code)
+
+
+@socketio.on("queue_next")
+def on_queue_next(data):
+    """Host plays the next queued video (or emits empty if queue empty)."""
+    code = ((data or {}).get("code") or "").upper()
+    if not code or not _require_admin(code):
+        return
+    q = QUEUE.get(code, [])
+    if not q:
+        emit("error", {"text": "Queue is empty."})
+        return
+    item = q.pop(0)
+    _emit_queue(code)
+    vid = item["video_id"]
+    with closing(sqlite3.connect(DB_PATH)) as db:
+        db.execute("UPDATE rooms SET video_id = ? WHERE code = ?", (vid, code))
+        db.commit()
+    PLAYER_STATE[code] = {"video_id": vid, "playing": True, "position": 0, "updated_at": time.time()}
+    emit("load", {"video_id": vid, "playing": True, "position": 0}, to=code)
+    emit("system", {"text": f"⏭ Playing next: queued by {item['added_by']}"}, to=code)
+
+
+@socketio.on("queue_get")
+def on_queue_get(data):
+    code = ((data or {}).get("code") or "").upper()
+    emit("queue", QUEUE.get(code, []))
 
 
 # ---------------------------------------------------------------------------
