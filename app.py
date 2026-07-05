@@ -245,20 +245,33 @@ def register():
         elif len(pw) < 6:
             flash("Password must be at least 6 characters.", "danger")
         else:
-            try:
-                db = get_db()
-                db.execute(
-                    "INSERT INTO users (username, email, password_hash, created_at) VALUES (?,?,?,?)",
-                    (u, e, generate_password_hash(pw), datetime.utcnow().isoformat()),
-                )
-                db.commit()
-                # Auto-login for smooth UX
-                row = db.execute("SELECT * FROM users WHERE username = ?", (u,)).fetchone()
-                login_user(User(row), remember=True)
-                flash("Welcome to Tubelet Party! 🎉", "success")
-                return redirect(request.args.get("next") or url_for("lobby"))
-            except sqlite3.IntegrityError:
-                flash("Username or email already taken.", "danger")
+            db = get_db()
+            # Case-insensitive duplicate check BEFORE inserting
+            existing = db.execute(
+                "SELECT username, email FROM users WHERE LOWER(username) = LOWER(?) OR email = ?",
+                (u, e),
+            ).fetchone()
+            if existing:
+                if existing["email"] == e:
+                    flash("That email is already registered — try signing in.", "danger")
+                else:
+                    flash("That username is taken — please pick another.", "danger")
+            else:
+                try:
+                    db.execute(
+                        "INSERT INTO users (username, email, password_hash, created_at) VALUES (?,?,?,?)",
+                        (u, e, generate_password_hash(pw), datetime.utcnow().isoformat()),
+                    )
+                    db.commit()
+                    # Auto-login for smooth UX
+                    row = db.execute(
+                        "SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (u,)
+                    ).fetchone()
+                    login_user(User(row), remember=True)
+                    flash("Welcome to Tubelet Party! 🎉", "success")
+                    return redirect(request.args.get("next") or url_for("lobby"))
+                except sqlite3.IntegrityError:
+                    flash("Username or email already taken.", "danger")
     return render_template("register.html", next=request.args.get("next", ""))
 
 
@@ -267,16 +280,21 @@ def login():
     if current_user.is_authenticated:
         return redirect(request.args.get("next") or url_for("lobby"))
     if request.method == "POST":
-        ident = request.form.get("identifier", "").strip()
-        pw = request.form.get("password", "")
+        ident = (request.form.get("identifier") or "").strip()
+        pw = request.form.get("password") or ""
+        if not ident or not pw:
+            flash("Please enter your username/email and password.", "danger")
+            return render_template("login.html", next=request.args.get("next", ""))
+        # Case-insensitive lookup for BOTH username and email
+        # SQLite's LOWER() + our normalized email storage make this reliable
         row = get_db().execute(
-            "SELECT * FROM users WHERE username = ? OR email = ?",
-            (ident, ident.lower()),
+            "SELECT * FROM users WHERE LOWER(username) = LOWER(?) OR email = LOWER(?)",
+            (ident, ident),
         ).fetchone()
         if row and check_password_hash(row["password_hash"], pw):
             login_user(User(row), remember=True)
             return redirect(request.args.get("next") or url_for("lobby"))
-        flash("Invalid credentials.", "danger")
+        flash("Invalid username/email or password. Please try again.", "danger")
     return render_template("login.html", next=request.args.get("next", ""))
 
 

@@ -217,44 +217,71 @@
   /* Speed/quality/CC dropdown containers */
   .btn-wrap{position:relative;display:inline-block}
 
-  /* Fullscreen mode — grid changes so chat sidebar shrinks */
+  /* ==================== FULLSCREEN MODE ==================== */
+  /* Fullscreen = video takes most of screen, chat is a sidebar on the right.
+     Layout adapts based on device orientation + width. */
+  html:fullscreen,body:fullscreen{background:#000}
   .stage.fullscreen{
-    grid-template-columns:1fr 340px;
     position:fixed !important;inset:0 !important;z-index:200;
-    height:100vh !important;height:100dvh !important;
+    width:100vw;height:100vh;height:100dvh;
     background:#000;
+    grid-template-columns:1fr 340px;
+    gap:0;padding:0;
   }
   .stage.fullscreen .topbar{display:none}
-  .stage.fullscreen .video-col{background:#000}
-  .stage.fullscreen .player-shell{padding:0}
+  .stage.fullscreen .video-info{display:none}     /* hide info bar in fullscreen */
+  .stage.fullscreen .video-col{background:#000;overflow:hidden;height:100vh;height:100dvh}
+  .stage.fullscreen .player-shell{padding:0;height:100%;display:flex;align-items:center;justify-content:center}
   .stage.fullscreen .player-frame{
-    max-height:100vh;max-height:100dvh;height:100vh;height:100dvh;
-    aspect-ratio:auto;
+    width:100%;height:100%;max-width:none;max-height:none;
+    aspect-ratio:auto;margin:0;
   }
-  .stage.fullscreen .video-info{display:none}
-  .stage.fullscreen.chat-hidden{grid-template-columns:1fr 0}
+  /* When chat is hidden, video takes the full width */
+  .stage.fullscreen.chat-hidden{grid-template-columns:1fr}
   .stage.fullscreen.chat-hidden .chat-panel{display:none}
-  /* Fullscreen close button */
+
+  /* Chat sidebar in fullscreen (desktop + landscape mobile) */
+  .stage.fullscreen .chat-panel{
+    position:relative !important;
+    inset:auto !important;
+    height:100vh !important;height:100dvh !important;
+    width:auto !important;
+    transform:none !important;
+    border-radius:0;
+    border-left:1px solid var(--border);
+    border-top:0;
+    box-shadow:-10px 0 30px rgba(0,0,0,.4);
+    display:flex !important;
+  }
+  .stage.fullscreen .chat-panel .drag-handle,
+  .stage.fullscreen .chat-panel .close-btn{display:none !important}
+
+  /* Fullscreen close (top-right of video area) */
   .fs-close{
-    display:none;position:absolute;top:16px;right:16px;z-index:20;
-    width:40px;height:40px;border-radius:50%;
-    background:rgba(0,0,0,.6);color:#fff;border:0;font-size:18px;cursor:pointer;
-    backdrop-filter:blur(10px);
+    display:none;position:absolute;top:14px;right:14px;z-index:20;
+    width:42px;height:42px;border-radius:50%;
+    background:rgba(0,0,0,.65);color:#fff;border:0;font-size:18px;cursor:pointer;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    transition:background .15s;
   }
   .stage.fullscreen .fs-close{display:inline-flex;align-items:center;justify-content:center}
-  .stage.fullscreen .fs-close:hover{background:rgba(0,0,0,.85)}
-  /* In-fullscreen chat toggle button on video */
+  .fs-close:hover{background:rgba(0,0,0,.85)}
+  /* When chat is hidden, close button stays top-right of viewport */
+  .stage.fullscreen.chat-hidden .fs-close{right:14px}
+
+  /* In-fullscreen chat toggle button (opens/hides the sidebar) */
   .fs-chat-btn{
-    display:none;position:absolute;top:16px;right:68px;z-index:20;
-    padding:0 16px;height:40px;border-radius:20px;
-    background:rgba(0,0,0,.6);color:#fff;border:0;font-size:13px;font-weight:600;cursor:pointer;
-    backdrop-filter:blur(10px);align-items:center;gap:6px;
+    display:none;position:absolute;top:14px;right:66px;z-index:20;
+    padding:0 14px;height:42px;border-radius:21px;
+    background:rgba(0,0,0,.65);color:#fff;border:0;font-size:13px;font-weight:600;cursor:pointer;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    align-items:center;gap:6px;transition:background .15s;
   }
   .stage.fullscreen .fs-chat-btn{display:inline-flex}
   .fs-chat-btn:hover{background:rgba(0,0,0,.85)}
   .fs-chat-btn .badge-count{
     background:var(--brand);color:#fff;font-size:10px;font-weight:700;
-    padding:1px 6px;border-radius:8px;min-width:16px;
+    padding:1px 6px;border-radius:8px;min-width:16px;line-height:1.3;
   }
 
   /* ===== Video info panel (below player, normal mode) ===== */
@@ -378,63 +405,128 @@
   .drawer-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:55}
   .drawer-backdrop.show{display:block}
 
-  /* ============ MOBILE ============ */
+  /* ==================== MOBILE (portrait phones + small screens) ==================== */
   @media(max-width:900px){
     body{overflow:auto}
-    .stage{grid-template-columns:1fr;height:auto;min-height:calc(100dvh - 56px - var(--safe-top))}
-    .player-frame{max-height:none;aspect-ratio:16/9}
+    .stage:not(.fullscreen){
+      grid-template-columns:1fr;
+      height:auto;min-height:calc(100dvh - 56px - var(--safe-top));
+    }
+    .stage:not(.fullscreen) .player-frame{max-height:none;aspect-ratio:16/9}
     .video-info{padding:12px 14px}
     .room-title{font-size:15px}
     .info-row{font-size:12px;gap:8px}
     .chip{padding:8px 12px;font-size:12px;min-height:36px}
     .load-form{width:100%;order:99}
 
-    /* Chat becomes a bottom drawer */
-    .chat-panel{
-      position:fixed;inset:0;top:auto;height:80vh;height:80dvh;
+    /* Normal-mode chat becomes a bottom-sheet drawer */
+    .stage:not(.fullscreen) .chat-panel{
+      position:fixed;left:0;right:0;bottom:0;top:auto;
+      height:80vh;height:80dvh;width:auto;
       z-index:70;border-left:0;border-top:1px solid var(--border);
       border-radius:20px 20px 0 0;transform:translateY(100%);
       transition:transform .28s cubic-bezier(.4,0,.2,1);
       box-shadow:0 -20px 60px rgba(0,0,0,.5);
     }
-    .chat-panel.open{transform:translateY(0)}
-    .chat-panel .drag-handle{
+    .stage:not(.fullscreen) .chat-panel.open{transform:translateY(0)}
+    .stage:not(.fullscreen) .chat-panel .drag-handle{
       display:block;width:40px;height:4px;background:var(--border-2);
       border-radius:2px;margin:8px auto 4px;flex-shrink:0;
     }
-    .chat-panel .close-btn{
+    .stage:not(.fullscreen) .chat-panel .close-btn{
       position:absolute;top:12px;right:12px;background:var(--bg-3);border:0;
       color:var(--text);width:32px;height:32px;border-radius:50%;cursor:pointer;
       font-size:16px;display:inline-flex;align-items:center;justify-content:center;z-index:2;
     }
     .fab{display:inline-flex}
-
-    /* Fullscreen on mobile — video fills viewport, chat still floats */
-    .stage.fullscreen{grid-template-columns:1fr}
-    .stage.fullscreen .chat-panel{
-      position:fixed;bottom:0;left:0;right:0;top:auto;
-      height:70vh;height:70dvh;transform:translateY(100%);
-    }
-    .stage.fullscreen .chat-panel.open{transform:translateY(0)}
-    .stage.fullscreen.chat-hidden{grid-template-columns:1fr}
-    .stage.fullscreen .fs-chat-btn{right:68px}
   }
   @media(min-width:901px){
     .chat-panel .drag-handle,.chat-panel .close-btn{display:none}
   }
 
-  /* Landscape phone in fullscreen — video takes most, chat sidebar */
-  @media(max-width:900px) and (orientation:landscape){
-    .stage.fullscreen{grid-template-columns:1fr 300px}
+  /* ==================== MOBILE PORTRAIT + FULLSCREEN ==================== */
+  /* Video takes most of the screen; chat opens as bottom drawer on demand */
+  @media(max-width:900px) and (orientation:portrait){
+    .stage.fullscreen{grid-template-columns:1fr}
     .stage.fullscreen .chat-panel{
-      position:relative;height:100vh;height:100dvh;
-      transform:none;border-radius:0;border-left:1px solid var(--border);border-top:0;
-      box-shadow:none;
+      position:fixed !important;
+      left:0;right:0;bottom:0;top:auto;
+      width:auto !important;
+      height:70vh !important;height:70dvh !important;
+      z-index:210;
+      border-left:0;border-top:1px solid var(--border);
+      border-radius:20px 20px 0 0;
+      transform:translateY(100%);
+      transition:transform .28s cubic-bezier(.4,0,.2,1);
+      box-shadow:0 -20px 60px rgba(0,0,0,.5);
+    }
+    .stage.fullscreen .chat-panel.open{transform:translateY(0) !important}
+    .stage.fullscreen .chat-panel .drag-handle{display:block !important}
+    .stage.fullscreen .chat-panel .close-btn{display:inline-flex !important}
+    .stage.fullscreen.chat-hidden .chat-panel{display:flex !important}   /* still allow open */
+    .stage.fullscreen.chat-hidden .chat-panel:not(.open){display:none !important}
+  }
+
+  /* ==================== MOBILE LANDSCAPE + FULLSCREEN (the requested fix) ==================== */
+  /* Video left, chat sidebar right — like YouTube Live on landscape phones */
+  @media(max-width:1000px) and (orientation:landscape){
+    .stage.fullscreen{
+      grid-template-columns:1fr min(300px, 35vw);
+      gap:0;
+    }
+    .stage.fullscreen .chat-panel{
+      position:relative !important;
+      inset:auto !important;
+      width:auto !important;
+      height:100vh !important;height:100dvh !important;
+      transform:none !important;
+      border-radius:0 !important;
+      border-left:1px solid var(--border) !important;
+      border-top:0 !important;
+      box-shadow:none !important;
+      display:flex !important;
     }
     .stage.fullscreen .chat-panel .drag-handle,
-    .stage.fullscreen .chat-panel .close-btn{display:none}
+    .stage.fullscreen .chat-panel .close-btn{display:none !important}
     .stage.fullscreen.chat-hidden{grid-template-columns:1fr}
-    .stage.fullscreen.chat-hidden .chat-panel{display:none}
+    .stage.fullscreen.chat-hidden .chat-panel{display:none !important}
+
+    /* Compact chat for narrow landscape sidebar */
+    .stage.fullscreen .chat-tab{padding:10px 6px;font-size:11px}
+    .stage.fullscreen .chat-log{padding:10px}
+    .stage.fullscreen .msg .body{font-size:13px;padding:6px 10px}
+    .stage.fullscreen .chat-form{padding:8px}
+    .stage.fullscreen .chat-form input{padding:8px 12px;font-size:13px;min-height:36px}
+    .stage.fullscreen .chat-form button{padding:8px 12px;min-height:36px;font-size:13px}
+
+    /* Controls: smaller buttons so they don't overflow */
+    .stage.fullscreen .yt-btn{width:36px;height:36px}
+    .stage.fullscreen .yt-btn svg{width:20px;height:20px}
+    .stage.fullscreen .yt-btn.small{width:32px;height:32px}
+    .stage.fullscreen .yt-btn.small svg{width:16px;height:16px}
+    .stage.fullscreen .time-display{font-size:12px;padding:0 6px}
+    .stage.fullscreen .vol-slider input{width:50px}
+
+    /* FS buttons positioned safely away from the chat sidebar */
+    .stage.fullscreen .fs-chat-btn{
+      right:auto;left:14px;top:14px;
+      padding:0 12px;height:38px;font-size:12px;
+    }
+    .stage.fullscreen .fs-close{
+      top:14px;right:14px;width:38px;height:38px;font-size:16px;
+    }
+    /* When chat is hidden, fs-close stays right, fs-chat-btn stays left */
+    .stage.fullscreen.chat-hidden .fs-chat-btn{left:14px;right:auto}
+
+    /* Hide the FAB in fullscreen landscape (we have the top-left button) */
+    .stage.fullscreen ~ .fab{display:none}
+  }
+
+  /* Very small landscape phones — shrink chat further */
+  @media(max-height:450px) and (orientation:landscape){
+    .stage.fullscreen{grid-template-columns:1fr min(260px, 30vw)}
+    .stage.fullscreen .yt-controls{padding:0 4px 2px}
+    .stage.fullscreen .seek-row{padding:4px 4px 0}
   }
 </style>
 {% endblock %}
@@ -1010,33 +1102,64 @@
   window.toggleFullscreen = () => {
     isFullscreen = !isFullscreen;
     el.stage.classList.toggle('fullscreen', isFullscreen);
+    // Reset chat-hidden state so sidebar appears by default when entering fullscreen
+    if(isFullscreen) el.stage.classList.remove('chat-hidden');
     el.iconFsEnter.style.display = isFullscreen ? 'none' : '';
     el.iconFsExit.style.display = isFullscreen ? '' : 'none';
-    // Also request native fullscreen for immersive
+    // Close mobile drawer if it was open
+    $('chatPanel').classList.remove('open');
+    $('drawerBackdrop').classList.remove('show');
+    // Request native fullscreen for immersive experience
     try{
       if(isFullscreen){
-        (el.stage.requestFullscreen || el.stage.webkitRequestFullscreen || el.stage.msRequestFullscreen).call(el.stage);
-        // Landscape on mobile
-        if(screen.orientation && screen.orientation.lock){
+        const req = el.stage.requestFullscreen || el.stage.webkitRequestFullscreen ||
+                    el.stage.msRequestFullscreen || el.stage.mozRequestFullScreen;
+        if(req) req.call(el.stage).catch(()=>{});
+        // Landscape lock on mobile phones only
+        if(window.innerWidth <= 900 && screen.orientation && screen.orientation.lock){
           screen.orientation.lock('landscape').catch(()=>{});
         }
       } else {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen ||
+                     document.msExitFullscreen || document.mozCancelFullScreen;
         if(document.fullscreenElement || document.webkitFullscreenElement){
-          (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+          if(exit) exit.call(document).catch(()=>{});
         }
-        if(screen.orientation && screen.orientation.unlock){ screen.orientation.unlock(); }
+        if(screen.orientation && screen.orientation.unlock){
+          try{ screen.orientation.unlock(); }catch(e){}
+        }
       }
     }catch(e){}
+    // Force a resize event so YT iframe adapts
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
   };
   el.btnFullscreen.addEventListener('click', toggleFullscreen);
-  document.addEventListener('fullscreenchange', () => {
-    // Sync UI if user pressed ESC
-    if(!document.fullscreenElement && isFullscreen){
-      isFullscreen = false;
-      el.stage.classList.remove('fullscreen');
-      el.iconFsEnter.style.display=''; el.iconFsExit.style.display='none';
-    }
+
+  // Sync UI if user pressed ESC or exited via other means
+  ['fullscreenchange','webkitfullscreenchange','mozfullscreenchange','MSFullscreenChange'].forEach(ev => {
+    document.addEventListener(ev, () => {
+      const isNative = !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                          document.mozFullScreenElement || document.msFullscreenElement);
+      if(!isNative && isFullscreen){
+        isFullscreen = false;
+        el.stage.classList.remove('fullscreen','chat-hidden');
+        el.iconFsEnter.style.display=''; el.iconFsExit.style.display='none';
+      }
+    });
   });
+
+  // On orientation change, ensure chat sidebar visibility is sensible
+  const handleOrientation = () => {
+    if(el.stage.classList.contains('fullscreen')){
+      // Reset drawer state; sidebar CSS handles landscape/portrait layout
+      $('chatPanel').classList.remove('open');
+      $('drawerBackdrop').classList.remove('show');
+      // In landscape fullscreen make sure sidebar is shown by default
+      if(isLandscape()) el.stage.classList.remove('chat-hidden');
+    }
+  };
+  window.addEventListener('orientationchange', () => setTimeout(handleOrientation, 300));
+  window.addEventListener('resize', handleOrientation);
 
   // ==================== KEYBOARD SHORTCUTS (host) ====================
   document.addEventListener('keydown', (e) => {
@@ -1257,31 +1380,41 @@
   });
 
   function isChatVisible(){
-    // Desktop non-fullscreen: chat panel is visible on the side
-    if(window.innerWidth > 900 && !el.stage.classList.contains('chat-hidden')){
+    // Sidebar mode (desktop or fullscreen-landscape)
+    if(usesSidebar()){
+      if(el.stage.classList.contains('fullscreen') && el.stage.classList.contains('chat-hidden')) return false;
       return document.querySelector('.chat-tab[data-pane="chat"]').classList.contains('active');
     }
+    // Drawer mode (portrait mobile)
     return $('chatPanel').classList.contains('open');
+  }
+
+  function isLandscape(){ return window.matchMedia('(orientation:landscape)').matches; }
+  function usesSidebar(){
+    // Sidebar mode = desktop OR fullscreen-landscape (any width)
+    return window.innerWidth > 900 || (el.stage.classList.contains('fullscreen') && isLandscape());
   }
 
   window.openChat = () => {
     const panel = $('chatPanel');
-    if(el.stage.classList.contains('fullscreen') && window.innerWidth > 900){
-      // Desktop fullscreen: toggle chat sidebar visibility
-      el.stage.classList.toggle('chat-hidden');
-    } else {
+    if(el.stage.classList.contains('fullscreen') && usesSidebar()){
+      // Fullscreen sidebar mode → toggle its visibility
+      el.stage.classList.remove('chat-hidden');
+    } else if(window.innerWidth <= 900){
+      // Portrait mobile (fullscreen or not) → open bottom drawer
       panel.classList.add('open');
       $('drawerBackdrop').classList.add('show');
     }
+    // Desktop non-fullscreen: chat is always visible, just switch to Chat tab
     unread = 0; updateUnread();
     const chatTab = document.querySelector('.chat-tab[data-pane="chat"]');
     if(!chatTab.classList.contains('active')) chatTab.click();
-    setTimeout(scrollChat, 100);
+    setTimeout(scrollChat, 120);
   };
   window.closeChat = () => {
     $('chatPanel').classList.remove('open');
     $('drawerBackdrop').classList.remove('show');
-    if(el.stage.classList.contains('fullscreen') && window.innerWidth > 900){
+    if(el.stage.classList.contains('fullscreen') && usesSidebar()){
       el.stage.classList.add('chat-hidden');
     }
   };
